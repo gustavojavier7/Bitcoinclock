@@ -3,186 +3,101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Motor de Ajedrez Dual - Motores vs Motores</title>
-    
-    <!-- Meta tags adicionales -->
-    <meta name="description" content="Sistema de enfrentamiento entre motores de ajedrez con evaluación Stockfish">
-    <meta name="keywords" content="ajedrez, motores, stockfish, enfrentamiento, evaluación">
-    <meta name="author" content="Sistema de Ajedrez Dual">
-    
-    <!-- Optimización de carga -->
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-    
-    <!-- Dependencias externas -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.2/chess.min.js" onerror="alert('Error al cargar chess.js. Por favor, verifica tu conexión o intenta de nuevo.')"></script>
-    
-    <!-- Estilos locales -->
-    <link rel="stylesheet" href="styles.css">
-    
-    <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♛</text></svg>">
+    <title>Hora desde MTP y Media de Bitcoin (CORS Fijo)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background: linear-gradient(to bottom, #1e3c72, #2a5298);
+            color: white;
+            padding: 50px;
+        }
+        .time-display {
+            font-size: 2em;
+            margin: 20px;
+            color: #f0b90b; /* Color Bitcoin */
+        }
+        #status {
+            font-size: 1.2em;
+            color: #ccc;
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <!-- ENCABEZADO -->
-        <div class="header">
-            <h1>🏆 Motor de Ajedrez Dual</h1>
-            <p class="subtitle">Enfrentamiento entre motores con evaluación Stockfish</p>
-        </div>
+    <h1>Hora según Blockchain de Bitcoin</h1>
+    <div class="time-display" id="mtp-time">MTP + 3300s: Cargando...</div>
+    <div class="time-display" id="system-time">Tiempo del sistema: Cargando...</div>
+    <div class="time-display" id="mean-time">Media + 3300s: Cargando...</div>
+    <div id="status">Obteniendo datos...</div>
 
-        <!-- SECCIÓN DE CARGA DE MOTORES -->
-        <div class="engine-upload-section">
-            <div class="engines-grid">
-                <!-- Motor Blancas -->
-                <div class="engine-box" id="engineBoxWhite">
-                    <h3>⚪ Motor Blancas</h3>
-                    <input type="file" id="engineFileWhite" class="file-input" accept=".js,.txt">
-                    <button onclick="document.getElementById('engineFileWhite').click()" class="upload-btn">
-                        📁 Cargar Motor
-                    </button>
-                    <div class="engine-info" id="engineInfoWhite">
-                        No hay motor cargado
-                    </div>
-                </div>
+    <script>
+        async function getBlockchainTimes() {
+            const mtpDiv = document.getElementById('mtp-time');
+            const systemDiv = document.getElementById('system-time');
+            const meanDiv = document.getElementById('mean-time');
+            const statusDiv = document.getElementById('status');
 
-                <!-- Motor Negras -->
-                <div class="engine-box" id="engineBoxBlack">
-                    <h3>⚫ Motor Negras</h3>
-                    <input type="file" id="engineFileBlack" class="file-input" accept=".js,.txt">
-                    <button onclick="document.getElementById('engineFileBlack').click()" class="upload-btn">
-                        📁 Cargar Motor
-                    </button>
-                    <div class="engine-info" id="engineInfoBlack">
-                        No hay motor cargado
-                    </div>
-                </div>
-            </div>
+            try {
+                // Actualizar tiempo del sistema
+                const systemDate = new Date();
+                systemDiv.textContent = `Tiempo del sistema (GMT-3): ${systemDate.toLocaleString('es-AR', {
+                    timeZone: 'America/Argentina/Buenos_Aires',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                })}`;
 
-            <!-- CONTROLES DE PARTIDA -->
-            <div class="game-controls">
-                <button id="startGameBtn" class="btn btn-success" onclick="startGame()" disabled>
-                    ▶️ Iniciar Partida
-                </button>
-                <button id="pauseGameBtn" class="btn btn-warning" onclick="pauseGame()" disabled>
-                    ⏸️ Pausar
-                </button>
-                <button id="stopGameBtn" class="btn btn-danger" onclick="stopGame()" disabled>
-                    ⏹️ Detener
-                </button>
-                <button class="btn btn-warning" onclick="resetGame()">
-                    🔄 Reiniciar
-                </button>
-            </div>
-        </div>
+                // Paso 1: Obtener el último bloque con ?cors=true
+                statusDiv.textContent = 'Consultando último bloque...';
+                const latestBlockResponse = await fetch('https://blockchain.info/latestblock?cors=true');
+                const latestBlock = await latestBlockResponse.json();
+                const latestHeight = latestBlock.height;
 
-        <!-- CONTENIDO PRINCIPAL -->
-        <div class="main-content">
-            <!-- TABLERO -->
-            <div class="board-section">
-                <div id="chessboard">
-                    <div class="loading">
-                        <h3>Carga ambos motores para comenzar</h3>
-                        <p>Los motores deben implementar la función <code>getMove(fen)</code></p>
-                    </div>
-                </div>
-                <div id="gameStatus" class="game-status">
-                    Esperando motores...
-                </div>
-            </div>
+                // Paso 2: Obtener timestamps de los últimos 11 bloques con ?cors=true
+                statusDiv.textContent = 'Obteniendo últimos 11 bloques...';
+                const timestamps = [];
+                for (let i = latestHeight; i >= latestHeight - 10; i--) {
+                    const blockResponse = await fetch(`https://blockchain.info/rawblock/${i}?cors=true`);
+                    const block = await blockResponse.json();
+                    timestamps.push(block.time);
+                }
 
-            <!-- PANEL DE INFORMACIÓN -->
-            <div class="info-panel">
-                <!-- EVALUACIÓN -->
-                <div class="evaluation-section">
-                    <div class="section-title">
-                        ⚖️ Evaluación Stockfish
-                    </div>
-                    <div id="evaluationValue" class="evaluation-value eval-neutral">
-                        --
-                    </div>
-                    <div id="evaluationDetails" class="evaluation-details">
-                        Motor no conectado
-                    </div>
-                </div>
+                // Paso 3: Calcular MTP (mediana) y compensar con 3300 segundos
+                const sortedTimestamps = [...timestamps].sort((a, b) => a - b);
+                const medianTimestamp = sortedTimestamps[Math.floor(sortedTimestamps.length / 2)];
+                const compensatedMTP = medianTimestamp + 3300; // Compensar 55 minutos
+                const mtpDate = new Date(compensatedMTP * 1000);
+                mtpDate.setHours(mtpDate.getHours() - 3); // Ajustar a GMT-3
+                mtpDiv.textContent = `MTP + 3300s (GMT-3): ${mtpDate.toLocaleString('es-AR', {
+                    timeZone: 'America/Argentina/Buenos_Aires',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                })}`;
 
-                <!-- ESTADO DE MOTORES -->
-                <div class="engines-status">
-                    <div class="section-title">
-                        🔧 Estado de Motores
-                    </div>
-                    <div class="engine-status">
-                        <span class="engine-name">Motor Blancas:</span>
-                        <span id="whiteEngineStatus" class="engine-ready">No cargado</span>
-                    </div>
-                    <div class="engine-status">
-                        <span class="engine-name">Motor Negras:</span>
-                        <span id="blackEngineStatus" class="engine-ready">No cargado</span>
-                    </div>
-                    <div class="engine-status">
-                        <span class="engine-name">Stockfish:</span>
-                        <span id="stockfishStatus" class="engine-ready">Desconectado</span>
-                    </div>
-                </div>
+                // Paso 4: Calcular media aritmética y compensar con 3300 segundos
+                const meanTimestamp = timestamps.reduce((sum, time) => sum + time, 0) / timestamps.length;
+                const compensatedMean = meanTimestamp + 3300; // Compensar 55 minutos
+                const meanDate = new Date(compensatedMean * 1000);
+                meanDate.setHours(meanDate.getHours() - 3); // Ajustar a GMT-3
+                meanDiv.textContent = `Media + 3300s (GMT-3): ${meanDate.toLocaleString('es-AR', {
+                    timeZone: 'America/Argentina/Buenos_Aires',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                })}`;
 
-                <!-- HISTORIAL DE MOVIMIENTOS -->
-                <div class="move-history">
-                    <div class="section-title">
-                        📋 Historial de Movimientos
-                    </div>
-                    <div id="moveHistory" class="move-list">
-                        La partida no ha comenzado
-                    </div>
-                </div>
+                // Mostrar estado
+                statusDiv.textContent = `Último bloque: ${latestHeight}, MTP original: ${new Date(medianTimestamp * 1000).toLocaleString('es-AR')}, Media original: ${new Date(meanTimestamp * 1000).toLocaleString('es-AR')}`;
+            } catch (error) {
+                statusDiv.textContent = `Error: ${error.message}. Intenta de nuevo.`;
+                mtpDiv.textContent = 'No disponible';
+                meanDiv.textContent = 'No disponible';
+            }
+        }
 
-                <!-- ESTADÍSTICAS DE PARTIDA -->
-                <div class="game-stats">
-                    <div class="section-title">
-                        📊 Estadísticas
-                    </div>
-                    <div class="stats-grid">
-                        <div class="stat-item">
-                            <span class="stat-label">Movimientos:</span>
-                            <span id="moveCount" class="stat-value">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Tiempo transcurrido:</span>
-                            <span id="gameTime" class="stat-value">00:00</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Última evaluación:</span>
-                            <span id="lastEval" class="stat-value">--</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- SECCIÓN DE INFORMACIÓN Y AYUDA -->
-        <div class="help-section">
-            <details>
-                <summary>📖 Formato de Motor Requerido</summary>
-                <div class="help-content">
-                    <h4>Tu motor debe implementar esta función:</h4>
-                    <pre><code>function getMove(fen, chess) {
-    // Tu lógica de ajedrez aquí
-    const moves = chess.moves();
-    
-    // Ejemplo: movimiento aleatorio
-    const randomIndex = Math.floor(Math.random() * moves.length);
-    return moves[randomIndex];
-}</code></pre>
-                    <p><strong>Parámetros:</strong></p>
-                    <ul>
-                        <li><code>fen</code>: Posición actual en notación FEN</li>
-                        <li><code>chess</code>: Instancia de Chess.js para análisis</li>
-                    </ul>
-                    <p><strong>Retorno:</strong> Movimiento en notación SAN (ej: "e4", "Nf3", "O-O")</p>
-                </div>
-            </details>
-        </div>
-    </div>
-
-    <!-- Scripts -->
-    <script src="script.js"></script>
+        // Ejecutar al cargar la página
+        getBlockchainTimes();
+    </script>
 </body>
 </html>
