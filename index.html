@@ -20,6 +20,24 @@
         #status {
             font-size: 1.2em;
             color: #ccc;
+            margin-top: 20px;
+        }
+        .error {
+            color: #ff6b6b;
+        }
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 1.1em;
+            background-color: #f0b90b;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            color: #1e3c72;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #ffc107;
         }
     </style>
 </head>
@@ -29,6 +47,7 @@
     <div class="time-display" id="system-time">Tiempo del sistema: Cargando...</div>
     <div class="time-display" id="mean-time">Media + 3300s: Cargando...</div>
     <div id="status">Obteniendo datos...</div>
+    <button onclick="getBlockchainTimes()">Actualizar</button>
 
     <script>
         async function getBlockchainTimes() {
@@ -37,91 +56,106 @@
             const meanDiv = document.getElementById('mean-time');
             const statusDiv = document.getElementById('status');
 
-            const fetchJson = async (url, options = {}) => {
-                const response = await fetch(url, {
-                    mode: 'cors',
-                    cache: 'no-store',
-                    ...options
-                });
-                if (!response.ok) {
-                    throw new Error(`Solicitud fallida: ${response.status}`);
-                }
-                return response.json();
-            };
-
-            const fetchWithFallback = async (url) => {
+            // Función para hacer peticiones con proxy CORS
+            const fetchWithProxy = async (url) => {
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
                 try {
-                    // Intentar primero la petición directa con CORS habilitado.
-                    return await fetchJson(url);
-                } catch (directError) {
-                    console.warn('Fallo la petición directa, probando proxy CORS.', directError);
-                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-                    return fetchJson(proxyUrl, { mode: 'cors' });
+                    const response = await fetch(proxyUrl);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return await response.json();
+                } catch (error) {
+                    console.error('Error fetching with proxy:', error);
+                    throw error;
                 }
             };
 
             try {
-                const fetchWithCorsBypass = async (url) => {
-                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-                    const response = await fetch(proxyUrl);
-                    if (!response.ok) {
-                        throw new Error(`Solicitud fallida: ${response.status}`);
-                    }
-                    return response.json();
-                };
-
                 // Actualizar tiempo del sistema
                 const systemDate = new Date();
                 systemDiv.textContent = `Tiempo del sistema (GMT-3): ${systemDate.toLocaleString('es-AR', {
                     timeZone: 'America/Argentina/Buenos_Aires',
                     hour: '2-digit',
                     minute: '2-digit',
-                    second: '2-digit'
+                    second: '2-digit',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
                 })}`;
 
-                // Paso 1: Obtener el último bloque con ?cors=true utilizando proxy
+                // Paso 1: Obtener el último bloque
                 statusDiv.textContent = 'Consultando último bloque...';
+                const latestBlock = await fetchWithProxy('https://blockchain.info/latestblock?cors=true');
                 const latestHeight = latestBlock.height;
 
-                // Paso 2: Obtener timestamps de los últimos 11 bloques con ?cors=true utilizando proxy
+                // Paso 2: Obtener timestamps de los últimos 11 bloques
                 statusDiv.textContent = 'Obteniendo últimos 11 bloques...';
                 const blockPromises = [];
                 for (let i = latestHeight; i >= latestHeight - 10; i--) {
+                    blockPromises.push(
+                        fetchWithProxy(`https://blockchain.info/block-height/${i}?format=json&cors=true`)
+                            .then(data => {
+                                // La respuesta es un array de bloques para esa altura
+                                if (Array.isArray(data.blocks) && data.blocks.length > 0) {
+                                    return data.blocks[0];
+                                } else if (data.time) {
+                                    return data;
+                                }
+                                throw new Error('Formato de respuesta inesperado');
+                            })
+                    );
                 }
+                
                 const blocks = await Promise.all(blockPromises);
                 const timestamps = blocks.map((block) => block.time);
+
+                // Validar que tenemos timestamps válidos
+                if (timestamps.some(ts => !ts || isNaN(ts))) {
+                    throw new Error('Algunos timestamps no son válidos');
+                }
 
                 // Paso 3: Calcular MTP (mediana) y compensar con 3300 segundos
                 const sortedTimestamps = [...timestamps].sort((a, b) => a - b);
                 const medianTimestamp = sortedTimestamps[Math.floor(sortedTimestamps.length / 2)];
                 const compensatedMTP = medianTimestamp + 3300; // Compensar 55 minutos
                 const mtpDate = new Date(compensatedMTP * 1000);
-                mtpDate.setHours(mtpDate.getHours() - 3); // Ajustar a GMT-3
+                
                 mtpDiv.textContent = `MTP + 3300s (GMT-3): ${mtpDate.toLocaleString('es-AR', {
                     timeZone: 'America/Argentina/Buenos_Aires',
                     hour: '2-digit',
                     minute: '2-digit',
-                    second: '2-digit'
+                    second: '2-digit',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
                 })}`;
 
                 // Paso 4: Calcular media aritmética y compensar con 3300 segundos
-                const meanTimestamp = timestamps.reduce((sum, time) => sum + time, 0) / timestamps.length;
+                const meanTimestamp = Math.round(timestamps.reduce((sum, time) => sum + time, 0) / timestamps.length);
                 const compensatedMean = meanTimestamp + 3300; // Compensar 55 minutos
                 const meanDate = new Date(compensatedMean * 1000);
-                meanDate.setHours(meanDate.getHours() - 3); // Ajustar a GMT-3
+                
                 meanDiv.textContent = `Media + 3300s (GMT-3): ${meanDate.toLocaleString('es-AR', {
                     timeZone: 'America/Argentina/Buenos_Aires',
                     hour: '2-digit',
                     minute: '2-digit',
-                    second: '2-digit'
+                    second: '2-digit',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
                 })}`;
 
-                // Mostrar estado
-                const mtpOriginal = new Date(medianTimestamp * 1000).toLocaleString('es-AR');
-                const meanOriginal = new Date(meanTimestamp * 1000).toLocaleString('es-AR');
-                statusDiv.textContent = `Último bloque: ${latestHeight}, MTP original: ${mtpOriginal}, Media original: ${meanOriginal}`;
+                // Mostrar estado con información adicional
+                const mtpOriginal = new Date(medianTimestamp * 1000);
+                const meanOriginal = new Date(meanTimestamp * 1000);
+                statusDiv.textContent = `✓ Último bloque: #${latestHeight} | MTP original: ${mtpOriginal.toLocaleTimeString('es-AR')} | Media original: ${meanOriginal.toLocaleTimeString('es-AR')}`;
+                statusDiv.className = '';
+                
             } catch (error) {
-                statusDiv.textContent = `Error: ${error.message}. Intenta de nuevo.`;
+                console.error('Error completo:', error);
+                statusDiv.textContent = `Error: ${error.message}. Haz clic en "Actualizar" para reintentar.`;
+                statusDiv.className = 'error';
                 mtpDiv.textContent = 'No disponible';
                 meanDiv.textContent = 'No disponible';
             }
@@ -129,6 +163,9 @@
 
         // Ejecutar al cargar la página
         getBlockchainTimes();
+        
+        // Actualizar automáticamente cada 60 segundos
+        setInterval(getBlockchainTimes, 60000);
     </script>
 </body>
 </html>
