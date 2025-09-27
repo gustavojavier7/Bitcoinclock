@@ -38,6 +38,15 @@
             const statusDiv = document.getElementById('status');
 
             try {
+                const fetchWithCorsBypass = async (url) => {
+                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+                    const response = await fetch(proxyUrl);
+                    if (!response.ok) {
+                        throw new Error(`Solicitud fallida: ${response.status}`);
+                    }
+                    return response.json();
+                };
+
                 // Actualizar tiempo del sistema
                 const systemDate = new Date();
                 systemDiv.textContent = `Tiempo del sistema (GMT-3): ${systemDate.toLocaleString('es-AR', {
@@ -47,18 +56,16 @@
                     second: '2-digit'
                 })}`;
 
-                // Paso 1: Obtener el último bloque con ?cors=true
+                // Paso 1: Obtener el último bloque con ?cors=true utilizando proxy
                 statusDiv.textContent = 'Consultando último bloque...';
-                const latestBlockResponse = await fetch('https://blockchain.info/latestblock?cors=true');
-                const latestBlock = await latestBlockResponse.json();
+                const latestBlock = await fetchWithCorsBypass('https://blockchain.info/latestblock?cors=true');
                 const latestHeight = latestBlock.height;
 
-                // Paso 2: Obtener timestamps de los últimos 11 bloques con ?cors=true
+                // Paso 2: Obtener timestamps de los últimos 11 bloques con ?cors=true utilizando proxy
                 statusDiv.textContent = 'Obteniendo últimos 11 bloques...';
                 const timestamps = [];
                 for (let i = latestHeight; i >= latestHeight - 10; i--) {
-                    const blockResponse = await fetch(`https://blockchain.info/rawblock/${i}?cors=true`);
-                    const block = await blockResponse.json();
+                    const block = await fetchWithCorsBypass(`https://blockchain.info/rawblock/${i}?cors=true`);
                     timestamps.push(block.time);
                 }
 
