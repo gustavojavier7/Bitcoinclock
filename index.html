@@ -115,8 +115,16 @@
 </head>
 <body>
     <div class="container">
-        <h1>⛓️ Hora según Blockchain de Bitcoin</h1>
-        
+        <h1 id="mainTitle">⛓️ Hora según Blockchain de Bitcoin</h1>
+
+        <div class="method-selector">
+            <label for="blockchain">Seleccionar Blockchain: </label>
+            <select id="blockchain">
+                <option value="BTC" selected>Bitcoin (BTC)</option>
+                <option value="BCH">Bitcoin Cash (BCH)</option>
+            </select>
+        </div>
+
         <div class="method-selector">
             <label for="method">Método de obtención: </label>
             <select id="method">
@@ -145,8 +153,11 @@
         let autoUpdateInterval = null;
         let isUpdating = false;
 
-        // Diferentes métodos de obtención de datos
-        const dataFetchers = {
+        // ==========================================================
+        // 1. CONFIGURACIÓN DE APIS POR CADENA
+        // ==========================================================
+
+        const BTC_FETCHERS = {
             // Método 1: Proxy AllOrigins
             proxy1: async () => {
                 const fetchWithProxy = async (url) => {
@@ -155,7 +166,7 @@
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     return await response.json();
                 };
-                
+
                 const latest = await fetchWithProxy('https://blockchain.info/latestblock?cors=true');
                 const blocks = [];
                 for (let i = latest.height; i >= latest.height - 10; i--) {
@@ -173,7 +184,7 @@
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     return await response.json();
                 };
-                
+
                 const latest = await fetchWithProxy('https://blockchain.info/latestblock');
                 const blocks = [];
                 for (let i = latest.height; i >= latest.height - 10; i--) {
@@ -191,7 +202,7 @@
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     return await response.json();
                 };
-                
+
                 const latest = await fetchWithProxy('https://blockchain.info/latestblock');
                 const blocks = [];
                 for (let i = latest.height; i >= latest.height - 10; i--) {
@@ -205,16 +216,16 @@
             mempool: async () => {
                 const response = await fetch('https://mempool.space/api/blocks/tip/height');
                 const latestHeight = await response.json();
-                
+
                 const blocksResponse = await fetch('https://mempool.space/api/v1/blocks');
                 const blocksData = await blocksResponse.json();
-                
+
                 // Convertir formato de timestamp si es necesario
                 const blocks = blocksData.slice(0, 11).map(block => ({
                     time: block.timestamp || Math.floor(block.mediantime || Date.now()/1000),
                     height: block.height
                 }));
-                
+
                 return { blocks, method: 'Mempool.space API' };
             },
 
@@ -222,7 +233,7 @@
             blockstream: async () => {
                 const tipResponse = await fetch('https://blockstream.info/api/blocks/tip/height');
                 const latestHeight = await tipResponse.text();
-                
+
                 const blocks = [];
                 for (let i = 0; i < 11; i++) {
                     const blockResponse = await fetch(`https://blockstream.info/api/block-height/${latestHeight - i}`);
@@ -231,10 +242,41 @@
                     const block = await blockData.json();
                     blocks.push({ time: block.timestamp, height: block.height });
                 }
-                
+
                 return { blocks, method: 'Blockstream API' };
             }
         };
+
+        const BCH_FETCHERS = {
+            // Nuevo Método para Bitcoin Cash (BCH) usando Blockchair
+            blockchair_bch: async () => {
+                // Endpoint que lista los últimos 11 bloques de BCH con su 'time' (timestamp)
+                const url = 'https://api.blockchair.com/bitcoin-cash/blocks?limit=11&s=id(desc)';
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+
+                // Mapear los datos al formato esperado {time: timestamp_unix}
+                // El campo 'time' de Blockchair es una cadena de fecha/hora UTC,
+                // por lo que usamos new Date() y lo convertimos a segundos Unix.
+                const blocks = data.data.map(block => ({
+                    // Convertir la cadena de fecha a milisegundos y luego a segundos Unix
+                    time: new Date(block.time + 'Z').getTime() / 1000,
+                    height: block.id
+                }));
+
+                if (blocks.length < 11) {
+                    throw new Error(`Solo se obtuvieron ${blocks.length} bloques válidos para BCH.`);
+                }
+                
+                return { blocks, method: 'Blockchair BCH API' };
+            }
+        };
+
+        // Función para obtener el conjunto de fetchers basado en la cadena seleccionada
+        function getFetcherSet(blockchain) {
+            return blockchain === 'BTC' ? BTC_FETCHERS : BCH_FETCHERS;
+        }
 
         async function getBlockchainTimes() {
             if (isUpdating) return;
@@ -247,11 +289,12 @@
             const proxyStatus = document.getElementById('proxyStatus');
             const updateBtn = document.getElementById('updateBtn');
             const methodSelect = document.getElementById('method');
-            
+            const blockchainSelect = document.getElementById('blockchain');
+
             updateBtn.disabled = true;
             statusDiv.innerHTML = '<span class="loading"></span> Obteniendo datos...';
             statusDiv.className = '';
-            
+
             try {
                 // Actualizar tiempo del sistema
                 const systemDate = new Date();
@@ -265,38 +308,59 @@
                     year: 'numeric'
                 })}`;
 
+                // 1. Obtener cadena seleccionada y actualizar el título
+                const selectedBlockchain = blockchainSelect.value;
+                document.getElementById('mainTitle').textContent = `⛓️ Hora según Blockchain de ${selectedBlockchain}`;
+                
+                // 2. Obtener el conjunto de fetchers para la cadena
+                const fetchers = getFetcherSet(selectedBlockchain);
+
                 let result = null;
                 let errors = [];
                 
                 const selectedMethod = methodSelect.value;
                 
+                // 3. Modificar la lógica de 'auto' y 'método específico' para usar el conjunto 'fetchers'
                 if (selectedMethod === 'auto') {
-                    // Modo automático: probar varios métodos
-                    const methods = ['mempool', 'blockstream', 'proxy1'];
-                    
-                    for (const method of methods) {
-                        try {
-                            statusDiv.innerHTML = `<span class="loading"></span> Probando ${method}...`;
-                            result = await dataFetchers[method]();
-                            proxyStatus.textContent = `✅ Conectado mediante: ${result.method}`;
-                            proxyStatus.className = 'proxy-status success';
-                            break;
-                        } catch (error) {
-                            console.warn(`Método ${method} falló:`, error.message);
-                            errors.push(`${method}: ${error.message}`);
+                    // **Lógica BTC (Auto):** solo BTC tiene auto con varios métodos
+                    if (selectedBlockchain === 'BTC') {
+                        const methods = ['mempool', 'blockstream', 'proxy1']; // Los métodos de BTC
+                        
+                        for (const method of methods) {
+                            try {
+                                statusDiv.innerHTML = `<span class="loading"></span> Probando ${method}...`;
+                                result = await fetchers[method](); // Usa el fetcher de BTC
+                                proxyStatus.textContent = `✅ Conectado mediante: ${result.method}`;
+                                proxyStatus.className = 'proxy-status success';
+                                break;
+                            } catch (error) {
+                                console.warn(`Método ${method} falló:`, error.message);
+                                errors.push(`${method}: ${error.message}`);
+                            }
                         }
+                    } else {
+                        // **Lógica BCH (Auto):** Como BCH solo tiene un método, lo probamos directamente
+                        statusDiv.innerHTML = `<span class="loading"></span> Probando Blockchair BCH...`;
+                        result = await fetchers.blockchair_bch(); 
+                        proxyStatus.textContent = `✅ Conectado mediante: ${result.method}`;
+                        proxyStatus.className = 'proxy-status success';
                     }
+                    
                 } else {
-                    // Usar método específico
+                    // **Usar método específico**
+                    // Si es BCH, siempre usamos el método blockchair_bch sin importar lo que diga el métodoSelect
+                    // Si es BTC, usamos el método específico seleccionado (mempool, proxy1, etc.)
+                    const methodToUse = selectedBlockchain === 'BCH' ? 'blockchair_bch' : selectedMethod;
+
                     try {
-                        result = await dataFetchers[selectedMethod]();
+                        result = await fetchers[methodToUse]();
                         proxyStatus.textContent = `✅ Conectado mediante: ${result.method}`;
                         proxyStatus.className = 'proxy-status success';
                     } catch (error) {
-                        errors.push(`${selectedMethod}: ${error.message}`);
+                        errors.push(`${methodToUse}: ${error.message}`);
                     }
                 }
-                
+
                 if (!result) {
                     throw new Error('Todos los métodos fallaron. Errores: ' + errors.join('; '));
                 }
@@ -371,6 +435,23 @@
 
         // Ejecutar al cargar
         window.addEventListener('load', () => {
+            getBlockchainTimes();
+        });
+
+        // Controla la visibilidad de los métodos de obtención según la cadena
+        document.getElementById('blockchain').addEventListener('change', function() {
+            const isBCH = this.value === 'BCH';
+            const methodSelect = document.getElementById('method');
+            
+            // Si es BCH, solo permitimos 'auto' (que se mapea al fetcher de BCH)
+            if (isBCH) {
+                methodSelect.value = 'auto'; // Forzamos a 'auto'
+                methodSelect.disabled = true;
+            } else {
+                methodSelect.disabled = false;
+            }
+            
+            // Forzamos la actualización
             getBlockchainTimes();
         });
     </script>
