@@ -1,459 +1,601 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hora desde MTP y Media de Bitcoin (Multi-Proxy)</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            text-align: center;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            min-height: 100vh;
-            margin: 0;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            padding: 30px;
-            backdrop-filter: blur(10px);
-        }
-        h1 {
-            margin-bottom: 30px;
-            font-size: 2.5em;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-        .time-display {
-            font-size: 1.8em;
-            margin: 20px;
-            padding: 15px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-            color: #f0b90b;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-        }
-        #status {
-            font-size: 1.1em;
-            color: #ccc;
-            margin: 20px;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 5px;
-            min-height: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .error {
-            color: #ff6b6b !important;
-            background: rgba(255, 0, 0, 0.1);
-        }
-        .success {
-            color: #4caf50 !important;
-            background: rgba(76, 175, 80, 0.1);
-        }
-        .warning {
-            color: #ffc107 !important;
-            background: rgba(255, 193, 7, 0.1);
-        }
-        button {
-            margin: 10px;
-            padding: 12px 24px;
-            font-size: 1.1em;
-            background: linear-gradient(135deg, #f0b90b 0%, #ffc107 100%);
-            border: none;
-            border-radius: 25px;
-            cursor: pointer;
-            color: #1e3c72;
-            font-weight: bold;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.2);
-        }
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        .proxy-status {
-            margin-top: 20px;
-            padding: 15px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            font-size: 0.9em;
-        }
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,.3);
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 1s ease-in-out infinite;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        .method-selector {
-            margin: 20px 0;
-        }
-        select {
-            padding: 8px 15px;
-            font-size: 1em;
-            border-radius: 5px;
-            border: none;
-            background: white;
-            color: #333;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bitcoin Clock — Cartel LED</title>
+
+  <style>
+    :root {
+      --columnas: 80;
+      --filas: 7;
+      --led-size: 7px;
+      --led-gap: 2px;
+      --led-on: #f0b90b;
+      --led-off: #1a1200;
+      --panel-width:  calc((var(--led-size) * var(--columnas)) + (var(--led-gap) * (var(--columnas) - 1)));
+      --panel-height: calc((var(--led-size) * var(--filas))   + (var(--led-gap) * (var(--filas)   - 1)));
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: white;
+      padding: 20px;
+    }
+
+    h1 {
+      margin-bottom: 24px;
+      font-size: 1.8em;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.4);
+      text-align: center;
+    }
+
+    /* ── PANEL LED ──────────────────────────────────── */
+    #theMarquee {
+      padding: 14px 16px;
+      background: linear-gradient(0deg, #111, #1e1e1e);
+      border-radius: 10px;
+      box-shadow:
+        0px  0px 2px 0px #777 inset,
+        0px -1px 2px 0px #777 inset,
+        2px -5px 5px 0px #111 inset,
+        0px -5px 5px 0px #111 inset,
+        0px  5px 18px 0px #050505;
+      overflow: hidden;
+    }
+
+    #matrix {
+      width:  var(--panel-width);
+      height: var(--panel-height);
+      display: grid;
+      grid-template-columns: repeat(var(--columnas), var(--led-size));
+      grid-template-rows:    repeat(var(--filas),    var(--led-size));
+      gap: var(--led-gap);
+    }
+
+    .light {
+      width:  var(--led-size);
+      height: var(--led-size);
+      border-radius: 50%;
+    }
+    .off {
+      background-color: var(--led-off);
+      box-shadow: inset 0 0 2px #000;
+    }
+    .on {
+      background-color: var(--led-on);
+      box-shadow: 0 0 4px var(--led-on), 0 0 8px var(--led-on);
+    }
+
+    /* ── ETIQUETA DE CANAL ──────────────────────────── */
+    #channelLabel {
+      margin-top: 10px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.55);
+      text-align: center;
+      text-transform: uppercase;
+      height: 16px;
+    }
+
+    /* ── CONTROLES ──────────────────────────────────── */
+    .controls {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+    }
+
+    button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.18);
+      color: white;
+      cursor: pointer;
+      font-size: 0.9em;
+      transition: background 0.2s;
+    }
+    button:hover  { background: rgba(255,255,255,0.30); }
+    button:active { background: rgba(255,255,255,0.40); }
+
+    .color-dot {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--led-on);
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+
+    /* ── STATUS ─────────────────────────────────────── */
+    #statusBar {
+      margin-top: 14px;
+      font-size: 0.78em;
+      color: rgba(255,255,255,0.50);
+      text-align: center;
+    }
+  </style>
 </head>
+
 <body>
-    <div class="container">
-        <h1 id="mainTitle">⛓️ Hora según Blockchain de Bitcoin</h1>
+  <h1>⛓️ Hora según Blockchain de Bitcoin</h1>
 
-        <div class="method-selector">
-            <label for="blockchain">Seleccionar Blockchain: </label>
-            <select id="blockchain">
-                <option value="BTC" selected>Bitcoin (BTC)</option>
-                <option value="BCH">Bitcoin Cash (BCH)</option>
-            </select>
-        </div>
+  <div id="theMarquee">
+    <div id="matrix"></div>
+  </div>
+  <div id="channelLabel">Inicializando…</div>
 
-        <div class="method-selector">
-            <label for="method">Método de obtención: </label>
-            <select id="method">
-                <option value="auto">Automático (prueba varios)</option>
-                <option value="proxy1">Proxy AllOrigins</option>
-                <option value="proxy2">Proxy CORS-Anywhere</option>
-                <option value="proxy3">Proxy JSONProxy</option>
-                <option value="mempool">Mempool.space API</option>
-                <option value="blockstream">Blockstream API</option>
-            </select>
-        </div>
+  <div class="controls">
+    <button id="slowBtn">◀ Más lento</button>
+    <button id="fastBtn">Más rápido ▶</button>
+    <button id="pauseBtn">⏸ Pausar</button>
+    <button id="colorBtn"><span class="color-dot" id="colorDot"></span>Color</button>
+    <button id="refreshBtn">🔄 Actualizar datos</button>
+  </div>
 
-        <div class="time-display" id="mtp-time">MTP + 3300s: Esperando...</div>
-        <div class="time-display" id="system-time">Tiempo del sistema: Esperando...</div>
-        <div class="time-display" id="mean-time">Media + 3300s: Esperando...</div>
-        
-        <div id="status">Listo para obtener datos</div>
-        
-        <button id="updateBtn" onclick="getBlockchainTimes()">🔄 Actualizar</button>
-        <button onclick="toggleAutoUpdate()">⏱️ Auto-actualización: <span id="autoStatus">OFF</span></button>
-        
-        <div class="proxy-status" id="proxyStatus"></div>
-    </div>
+  <div id="statusBar">Obteniendo datos de la blockchain…</div>
 
-    <script>
-        let autoUpdateInterval = null;
-        let isUpdating = false;
+  <script>
+    // ═══════════════════════════════════════════════════════════════
+    //  CONSTANTES DE LA MATRIZ
+    // ═══════════════════════════════════════════════════════════════
+    const COLS   = 80;
+    const ROWS   = 7;
+    const MARGIN = 3;   // columnas vacías entre final del mensaje y borde derecho al entrar
 
-        // ==========================================================
-        // 1. CONFIGURACIÓN DE APIS POR CADENA
-        // ==========================================================
+    // ═══════════════════════════════════════════════════════════════
+    //  ESTADO DEL ANIMADOR
+    // ═══════════════════════════════════════════════════════════════
+    // Fases: 'scroll-in' → 'pause' → 'scroll-out' → (siguiente canal)
+    let channels    = [];   // array de { label, text } que se irán cargando
+    let chanIdx     = 0;
+    let phase       = 'idle'; // idle | scroll-in | pause | blink | scroll-out
+    let colOffset   = 0;      // columna de inicio del mensaje en la pantalla
+    let msgColumns  = [];     // mensaje actual convertido a columnas LED
+    let blinkCount  = 0;
+    let blinkState  = true;
 
-        const BTC_FETCHERS = {
-            // Método 1: Proxy AllOrigins
-            proxy1: async () => {
-                const fetchWithProxy = async (url) => {
-                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-                    const response = await fetch(proxyUrl);
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    return await response.json();
-                };
+    let fps         = 20;
+    let paused      = false;
+    let lastFrame   = 0;
 
-                const latest = await fetchWithProxy('https://blockchain.info/latestblock?cors=true');
-                const blocks = [];
-                for (let i = latest.height; i >= latest.height - 10; i--) {
-                    const blockData = await fetchWithProxy(`https://blockchain.info/block-height/${i}?format=json&cors=true`);
-                    blocks.push(blockData.blocks[0]);
-                }
-                return { blocks, method: 'AllOrigins Proxy' };
-            },
+    // ═══════════════════════════════════════════════════════════════
+    //  DOM
+    // ═══════════════════════════════════════════════════════════════
+    const matrixEl    = document.getElementById('matrix');
+    const channelLbl  = document.getElementById('channelLabel');
+    const statusBar   = document.getElementById('statusBar');
+    const slowBtn     = document.getElementById('slowBtn');
+    const fastBtn     = document.getElementById('fastBtn');
+    const pauseBtn    = document.getElementById('pauseBtn');
+    const colorBtn    = document.getElementById('colorBtn');
+    const colorDot    = document.getElementById('colorDot');
+    const refreshBtn  = document.getElementById('refreshBtn');
 
-            // Método 2: CORS-Anywhere (necesita configuración)
-            proxy2: async () => {
-                const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-                const fetchWithProxy = async (url) => {
-                    const response = await fetch(proxyUrl + url);
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    return await response.json();
-                };
+    // ═══════════════════════════════════════════════════════════════
+    //  PALETA DE COLORES
+    // ═══════════════════════════════════════════════════════════════
+    const COLORS = ['#f0b90b', '#00ffff', '#ff3030', '#00ff66', '#ffffff', '#ff66ff'];
+    let colorIdx = 0;
 
-                const latest = await fetchWithProxy('https://blockchain.info/latestblock');
-                const blocks = [];
-                for (let i = latest.height; i >= latest.height - 10; i--) {
-                    const blockData = await fetchWithProxy(`https://blockchain.info/block-height/${i}?format=json`);
-                    blocks.push(blockData.blocks[0]);
-                }
-                return { blocks, method: 'CORS-Anywhere Proxy' };
-            },
+    // ═══════════════════════════════════════════════════════════════
+    //  INICIALIZACIÓN DE LA GRILLA DOM
+    // ═══════════════════════════════════════════════════════════════
+    function buildMatrix() {
+      matrixEl.innerHTML = '';
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const d = document.createElement('div');
+          d.className = 'light off';
+          matrixEl.appendChild(d);
+        }
+      }
+    }
 
-            // Método 3: JSONProxy
-            proxy3: async () => {
-                const fetchWithProxy = async (url) => {
-                    const proxyUrl = `https://jsonproxy.com/?url=${encodeURIComponent(url)}`;
-                    const response = await fetch(proxyUrl);
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    return await response.json();
-                };
+    // ═══════════════════════════════════════════════════════════════
+    //  RENDERIZADO EFICIENTE (solo cambia lo necesario)
+    // ═══════════════════════════════════════════════════════════════
+    function renderFrame(msgCols, startCol, visible) {
+      const children = matrixEl.children;
+      // Construir buffer de la pantalla
+      const screen = new Uint8Array(ROWS * COLS); // 0 = off, 1 = on
 
-                const latest = await fetchWithProxy('https://blockchain.info/latestblock');
-                const blocks = [];
-                for (let i = latest.height; i >= latest.height - 10; i--) {
-                    const blockData = await fetchWithProxy(`https://blockchain.info/block-height/${i}?format=json`);
-                    blocks.push(blockData.blocks[0]);
-                }
-                return { blocks, method: 'JSONProxy' };
-            },
+      if (visible) {
+        for (let mc = 0; mc < msgCols.length; mc++) {
+          const sc = startCol + mc;
+          if (sc < 0 || sc >= COLS) continue;
+          const col = msgCols[mc];
+          for (let r = 0; r < ROWS; r++) {
+            if (col[r]) screen[r * COLS + sc] = 1;
+          }
+        }
+      }
 
-            // Método 4: Mempool.space API (generalmente sin CORS)
-            mempool: async () => {
-                const response = await fetch('https://mempool.space/api/blocks/tip/height');
-                const latestHeight = await response.json();
+      for (let i = 0; i < ROWS * COLS; i++) {
+        const el  = children[i];
+        const on  = screen[i] === 1;
+        const was = el.classList.contains('on');
+        if (on !== was) {
+          if (on) { el.classList.remove('off'); el.classList.add('on'); }
+          else    { el.classList.remove('on');  el.classList.add('off'); }
+        }
+      }
+    }
 
-                const blocksResponse = await fetch('https://mempool.space/api/v1/blocks');
-                const blocksData = await blocksResponse.json();
+    function clearScreen() {
+      renderFrame([], 0, false);
+    }
 
-                // Convertir formato de timestamp si es necesario
-                const blocks = blocksData.slice(0, 11).map(block => ({
-                    time: block.timestamp || Math.floor(block.mediantime || Date.now()/1000),
-                    height: block.height
-                }));
+    // ═══════════════════════════════════════════════════════════════
+    //  MÁQUINA DE ESTADOS DE ANIMACIÓN
+    // ═══════════════════════════════════════════════════════════════
+    /*
+      FASES:
+      idle       → espera hasta tener canales
+      scroll-in  → el mensaje entra desde la derecha; termina cuando el último
+                   caracter llega al centro o cuando cabe completo en pantalla
+      pause      → mensaje estático 1.5 s
+      blink      → parpadea 3 s a 0.5 Hz (3 ciclos completos = 6 cambios)
+      scroll-out → el mensaje sale hacia la izquierda
+      → pasa al siguiente canal
+    */
 
-                return { blocks, method: 'Mempool.space API' };
-            },
+    // Timers para fases basadas en tiempo
+    let phaseTimer = 0; // timestamp de inicio de la fase actual
 
-            // Método 5: Blockstream API
-            blockstream: async () => {
-                const tipResponse = await fetch('https://blockstream.info/api/blocks/tip/height');
-                const latestHeight = await tipResponse.text();
+    // Cuántos pasos de blink quedan
+    const BLINK_TOTAL   = 6;   // 3 s × 0.5 Hz × 2 estados = 6 cambios
+    const BLINK_STEP_MS = 1000; // cada cambio dura 1000 ms (0.5 Hz = 1 ciclo/2s → medio ciclo = 1s)
 
-                const blocks = [];
-                for (let i = 0; i < 11; i++) {
-                    const blockResponse = await fetch(`https://blockstream.info/api/block-height/${latestHeight - i}`);
-                    const blockHash = await blockResponse.text();
-                    const blockData = await fetch(`https://blockstream.info/api/block/${blockHash}`);
-                    const block = await blockData.json();
-                    blocks.push({ time: block.timestamp, height: block.height });
-                }
+    function loadChannel(idx) {
+      chanIdx    = idx % channels.length;
+      const ch   = channels[chanIdx];
+      msgColumns = textToLED(ch.text);
+      colOffset  = COLS + MARGIN;  // empieza fuera por la derecha
+      channelLbl.textContent = ch.label;
+      phase      = 'scroll-in';
+    }
 
-                return { blocks, method: 'Blockstream API' };
-            }
+    function tickScroll() {
+      // ── scroll-in ──────────────────────────────────────────────
+      if (phase === 'scroll-in') {
+        colOffset--;
+        renderFrame(msgColumns, colOffset, true);
+
+        // El mensaje llegó: su último carácter visible entró en pantalla
+        // O bien el mensaje cabe completo y está centrado
+        const msgEnd = colOffset + msgColumns.length;
+        const msgFits = msgColumns.length <= COLS;
+
+        if (msgFits) {
+          // Centrar el mensaje
+          const targetStart = Math.floor((COLS - msgColumns.length) / 2);
+          if (colOffset <= targetStart) {
+            colOffset = targetStart;
+            renderFrame(msgColumns, colOffset, true);
+            phaseTimer = performance.now();
+            phase = 'pause';
+          }
+        } else {
+          // Mensaje más largo que la pantalla: pausa cuando el inicio entra
+          if (colOffset <= 0) {
+            phaseTimer = performance.now();
+            phase = 'pause';
+          }
+        }
+      }
+
+      // ── pause (1.5 s estático) ──────────────────────────────────
+      else if (phase === 'pause') {
+        renderFrame(msgColumns, colOffset, true);
+        if (performance.now() - phaseTimer >= 1500) {
+          blinkCount = 0;
+          blinkState = true;
+          phaseTimer = performance.now();
+          phase = 'blink';
+        }
+      }
+
+      // ── blink (3 s a 0.5 Hz) ───────────────────────────────────
+      else if (phase === 'blink') {
+        if (performance.now() - phaseTimer >= BLINK_STEP_MS) {
+          blinkState = !blinkState;
+          blinkCount++;
+          phaseTimer = performance.now();
+        }
+        renderFrame(msgColumns, colOffset, blinkState);
+
+        if (blinkCount >= BLINK_TOTAL) {
+          renderFrame(msgColumns, colOffset, true); // queda encendido
+          phase = 'scroll-out';
+        }
+      }
+
+      // ── scroll-out ──────────────────────────────────────────────
+      else if (phase === 'scroll-out') {
+        colOffset--;
+        renderFrame(msgColumns, colOffset, true);
+
+        // Salió completamente por la izquierda
+        if (colOffset + msgColumns.length <= 0) {
+          clearScreen();
+          if (channels.length > 0) {
+            loadChannel(chanIdx + 1);
+          } else {
+            phase = 'idle';
+          }
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  LOOP PRINCIPAL
+    // ═══════════════════════════════════════════════════════════════
+    function loop(ts) {
+      requestAnimationFrame(loop);
+
+      if (paused) return;
+      if (phase === 'idle') return;
+
+      // Control de velocidad para scroll; blink usa su propio timer
+      const interval = (phase === 'blink' || phase === 'pause') ? 0 : 1000 / fps;
+
+      if (ts - lastFrame < interval) return;
+      lastFrame = ts;
+
+      tickScroll();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  FUENTE 5×7
+    // ═══════════════════════════════════════════════════════════════
+    const FONT = {
+      "A":["01110","10001","10001","11111","10001","10001","10001"],
+      "B":["11110","10001","10001","11110","10001","10001","11110"],
+      "C":["01111","10000","10000","10000","10000","10000","01111"],
+      "D":["11110","10001","10001","10001","10001","10001","11110"],
+      "E":["11111","10000","10000","11110","10000","10000","11111"],
+      "F":["11111","10000","10000","11110","10000","10000","10000"],
+      "G":["01111","10000","10000","10011","10001","10001","01111"],
+      "H":["10001","10001","10001","11111","10001","10001","10001"],
+      "I":["11111","00100","00100","00100","00100","00100","11111"],
+      "J":["00111","00010","00010","00010","10010","10010","01100"],
+      "K":["10001","10010","10100","11000","10100","10010","10001"],
+      "L":["10000","10000","10000","10000","10000","10000","11111"],
+      "M":["10001","11011","10101","10101","10001","10001","10001"],
+      "N":["10001","11001","10101","10011","10001","10001","10001"],
+      "O":["01110","10001","10001","10001","10001","10001","01110"],
+      "P":["11110","10001","10001","11110","10000","10000","10000"],
+      "Q":["01110","10001","10001","10001","10101","10010","01101"],
+      "R":["11110","10001","10001","11110","10100","10010","10001"],
+      "S":["01111","10000","10000","01110","00001","00001","11110"],
+      "T":["11111","00100","00100","00100","00100","00100","00100"],
+      "U":["10001","10001","10001","10001","10001","10001","01110"],
+      "V":["10001","10001","10001","10001","10001","01010","00100"],
+      "W":["10001","10001","10001","10101","10101","10101","01010"],
+      "X":["10001","10001","01010","00100","01010","10001","10001"],
+      "Y":["10001","10001","01010","00100","00100","00100","00100"],
+      "Z":["11111","00001","00010","00100","01000","10000","11111"],
+      "0":["01110","10001","10011","10101","11001","10001","01110"],
+      "1":["00100","01100","00100","00100","00100","00100","01110"],
+      "2":["01110","10001","00001","00010","00100","01000","11111"],
+      "3":["11110","00001","00001","01110","00001","00001","11110"],
+      "4":["10010","10010","10010","11111","00010","00010","00010"],
+      "5":["11111","10000","10000","11110","00001","00001","11110"],
+      "6":["01111","10000","10000","11110","10001","10001","01110"],
+      "7":["11111","00001","00010","00100","01000","01000","01000"],
+      "8":["01110","10001","10001","01110","10001","10001","01110"],
+      "9":["01110","10001","10001","01111","00001","00001","11110"],
+      ".":["00000","00000","00000","00000","00000","01100","01100"],
+      ",":["00000","00000","00000","00000","00000","01100","01000"],
+      ":":["00000","01100","01100","00000","01100","01100","00000"],
+      "-":["00000","00000","00000","11111","00000","00000","00000"],
+      "/":["00001","00010","00010","00100","01000","01000","10000"],
+      "!":["00100","00100","00100","00100","00100","00000","00100"],
+      "?":["01110","10001","00001","00010","00100","00000","00100"],
+      "(":["00010","00100","01000","01000","01000","00100","00010"],
+      ")":["01000","00100","00010","00010","00010","00100","01000"],
+      "+":["00000","00100","00100","11111","00100","00100","00000"],
+      " ":["00000","00000","00000","00000","00000","00000","00000"]
+    };
+
+    function charToColumns(ch) {
+      const pat = FONT[ch] || FONT[' '];
+      const cols = [];
+      for (let c = 0; c < pat[0].length; c++) {
+        const col = [];
+        for (let r = 0; r < pat.length; r++) col.push(pat[r][c] === '1');
+        cols.push(col);
+      }
+      return cols;
+    }
+
+    function textToLED(text) {
+      const out = [];
+      const up  = text.toUpperCase();
+      for (let i = 0; i < up.length; i++) {
+        out.push(...charToColumns(up[i]));
+        out.push(...charToColumns(' ')); // separador entre letras
+      }
+      return out;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  CONTROLES UI
+    // ═══════════════════════════════════════════════════════════════
+    slowBtn.addEventListener('click',  () => { fps = Math.max(5, fps - 5); });
+    fastBtn.addEventListener('click',  () => { fps = Math.min(60, fps + 5); });
+
+    pauseBtn.addEventListener('click', () => {
+      paused = !paused;
+      pauseBtn.textContent = paused ? '▶ Continuar' : '⏸ Pausar';
+    });
+
+    colorBtn.addEventListener('click', () => {
+      colorIdx = (colorIdx + 1) % COLORS.length;
+      const c = COLORS[colorIdx];
+      document.documentElement.style.setProperty('--led-on',  c);
+      document.documentElement.style.setProperty('--led-off', adjustOff(c));
+      colorDot.style.background = c;
+    });
+
+    refreshBtn.addEventListener('click', () => {
+      statusBar.textContent = 'Actualizando datos…';
+      getBlockchainTimes();
+    });
+
+    function adjustOff(hex) {
+      // Versión muy oscura del color activo para el LED apagado
+      const r = parseInt(hex.slice(1,3),16);
+      const g = parseInt(hex.slice(3,5),16);
+      const b = parseInt(hex.slice(5,7),16);
+      return `rgb(${Math.round(r*0.07)},${Math.round(g*0.07)},${Math.round(b*0.07)})`;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  CARGA DE CANALES Y ARRANQUE
+    // ═══════════════════════════════════════════════════════════════
+    function setChannels(data) {
+      channels = data;
+      chanIdx  = 0;
+      if (channels.length > 0) loadChannel(0);
+    }
+
+    // ─── Datos de tiempo del sistema (siempre disponibles) ────────
+    function getSystemChannel() {
+      const d = new Date();
+      const fmt = d.toLocaleString('es-AR', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        day: '2-digit', month: '2-digit', year: 'numeric'
+      });
+      return { label: 'SISTEMA  (GMT-3)', text: `SISTEMA: ${fmt}` };
+    }
+
+    // ─── Datos de blockchain ──────────────────────────────────────
+    async function getBlockchainTimes() {
+      const fetchers = BTC_FETCHERS;
+      const methods  = ['mempool', 'blockstream', 'proxy1'];
+      let result = null;
+
+      for (const m of methods) {
+        try {
+          statusBar.textContent = `Probando ${m}…`;
+          result = await fetchers[m]();
+          break;
+        } catch(e) { /* intentar siguiente */ }
+      }
+
+      const sysCh = getSystemChannel();
+
+      if (!result) {
+        statusBar.textContent = '⚠️ Sin datos de blockchain · mostrando reloj del sistema';
+        setChannels([sysCh]);
+        return;
+      }
+
+      const timestamps = result.blocks.map(b => b.time).filter(t => t && !isNaN(t));
+      if (timestamps.length < 11) {
+        statusBar.textContent = '⚠️ Bloques insuficientes · mostrando reloj del sistema';
+        setChannels([sysCh]);
+        return;
+      }
+
+      // MTP
+      const sorted  = [...timestamps].sort((a,b) => a-b);
+      const mtp     = sorted[Math.floor(sorted.length/2)] + 3300;
+      const mtpDate = new Date(mtp * 1000);
+      const mtpFmt  = mtpDate.toLocaleString('es-AR', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        day: '2-digit', month: '2-digit', year: 'numeric'
+      });
+
+      // Media
+      const mean     = Math.round(timestamps.reduce((s,t) => s+t, 0) / timestamps.length) + 3300;
+      const meanDate = new Date(mean * 1000);
+      const meanFmt  = meanDate.toLocaleString('es-AR', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        day: '2-digit', month: '2-digit', year: 'numeric'
+      });
+
+      statusBar.textContent = `✓ Datos actualizados · vía ${result.method}`;
+
+      setChannels([
+        { label: 'SISTEMA  (GMT-3)',    text: `SISTEMA: ${sysCh.text.replace('SISTEMA: ','')}` },
+        { label: 'MTP + 3300s  (BTC)', text: `MTP: ${mtpFmt}` },
+        { label: 'MEDIA + 3300s (BTC)', text: `MEDIA: ${meanFmt}` }
+      ]);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  APIs BLOCKCHAIN (copiadas del original)
+    // ═══════════════════════════════════════════════════════════════
+    const BTC_FETCHERS = {
+      proxy1: async () => {
+        const px = async (url) => {
+          const r = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
         };
-
-        const BCH_FETCHERS = {
-            // Nuevo Método para Bitcoin Cash (BCH) usando Blockchair
-            blockchair_bch: async () => {
-                // Endpoint que lista los últimos 11 bloques de BCH con su 'time' (timestamp)
-                const url = 'https://api.blockchair.com/bitcoin-cash/blocks?limit=11&s=id(desc)';
-                const response = await fetch(url);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const data = await response.json();
-
-                // Mapear los datos al formato esperado {time: timestamp_unix}
-                // El campo 'time' de Blockchair es una cadena de fecha/hora UTC,
-                // por lo que usamos new Date() y lo convertimos a segundos Unix.
-                const blocks = data.data.map(block => ({
-                    // Convertir la cadena de fecha a milisegundos y luego a segundos Unix
-                    time: new Date(block.time + 'Z').getTime() / 1000,
-                    height: block.id
-                }));
-
-                if (blocks.length < 11) {
-                    throw new Error(`Solo se obtuvieron ${blocks.length} bloques válidos para BCH.`);
-                }
-                
-                return { blocks, method: 'Blockchair BCH API' };
-            }
-        };
-
-        // Función para obtener el conjunto de fetchers basado en la cadena seleccionada
-        function getFetcherSet(blockchain) {
-            return blockchain === 'BTC' ? BTC_FETCHERS : BCH_FETCHERS;
+        const latest = await px('https://blockchain.info/latestblock?cors=true');
+        const blocks = [];
+        for (let i = latest.height; i >= latest.height - 10; i--) {
+          const bd = await px(`https://blockchain.info/block-height/${i}?format=json&cors=true`);
+          blocks.push(bd.blocks[0]);
         }
-
-        async function getBlockchainTimes() {
-            if (isUpdating) return;
-            isUpdating = true;
-            
-            const mtpDiv = document.getElementById('mtp-time');
-            const systemDiv = document.getElementById('system-time');
-            const meanDiv = document.getElementById('mean-time');
-            const statusDiv = document.getElementById('status');
-            const proxyStatus = document.getElementById('proxyStatus');
-            const updateBtn = document.getElementById('updateBtn');
-            const methodSelect = document.getElementById('method');
-            const blockchainSelect = document.getElementById('blockchain');
-
-            updateBtn.disabled = true;
-            statusDiv.innerHTML = '<span class="loading"></span> Obteniendo datos...';
-            statusDiv.className = '';
-
-            try {
-                // Actualizar tiempo del sistema
-                const systemDate = new Date();
-                systemDiv.textContent = `Sistema (GMT-3): ${systemDate.toLocaleString('es-AR', {
-                    timeZone: 'America/Argentina/Buenos_Aires',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric'
-                })}`;
-
-                // 1. Obtener cadena seleccionada y actualizar el título
-                const selectedBlockchain = blockchainSelect.value;
-                document.getElementById('mainTitle').textContent = `⛓️ Hora según Blockchain de ${selectedBlockchain}`;
-                
-                // 2. Obtener el conjunto de fetchers para la cadena
-                const fetchers = getFetcherSet(selectedBlockchain);
-
-                let result = null;
-                let errors = [];
-                
-                const selectedMethod = methodSelect.value;
-                
-                // 3. Modificar la lógica de 'auto' y 'método específico' para usar el conjunto 'fetchers'
-                if (selectedMethod === 'auto') {
-                    // **Lógica BTC (Auto):** solo BTC tiene auto con varios métodos
-                    if (selectedBlockchain === 'BTC') {
-                        const methods = ['mempool', 'blockstream', 'proxy1']; // Los métodos de BTC
-                        
-                        for (const method of methods) {
-                            try {
-                                statusDiv.innerHTML = `<span class="loading"></span> Probando ${method}...`;
-                                result = await fetchers[method](); // Usa el fetcher de BTC
-                                proxyStatus.textContent = `✅ Conectado mediante: ${result.method}`;
-                                proxyStatus.className = 'proxy-status success';
-                                break;
-                            } catch (error) {
-                                console.warn(`Método ${method} falló:`, error.message);
-                                errors.push(`${method}: ${error.message}`);
-                            }
-                        }
-                    } else {
-                        // **Lógica BCH (Auto):** Como BCH solo tiene un método, lo probamos directamente
-                        statusDiv.innerHTML = `<span class="loading"></span> Probando Blockchair BCH...`;
-                        result = await fetchers.blockchair_bch(); 
-                        proxyStatus.textContent = `✅ Conectado mediante: ${result.method}`;
-                        proxyStatus.className = 'proxy-status success';
-                    }
-                    
-                } else {
-                    // **Usar método específico**
-                    // Si es BCH, siempre usamos el método blockchair_bch sin importar lo que diga el métodoSelect
-                    // Si es BTC, usamos el método específico seleccionado (mempool, proxy1, etc.)
-                    const methodToUse = selectedBlockchain === 'BCH' ? 'blockchair_bch' : selectedMethod;
-
-                    try {
-                        result = await fetchers[methodToUse]();
-                        proxyStatus.textContent = `✅ Conectado mediante: ${result.method}`;
-                        proxyStatus.className = 'proxy-status success';
-                    } catch (error) {
-                        errors.push(`${methodToUse}: ${error.message}`);
-                    }
-                }
-
-                if (!result) {
-                    throw new Error('Todos los métodos fallaron. Errores: ' + errors.join('; '));
-                }
-
-                // Procesar timestamps
-                const timestamps = result.blocks.map(block => block.time).filter(t => t && !isNaN(t));
-                
-                if (timestamps.length < 11) {
-                    throw new Error(`Solo se obtuvieron ${timestamps.length} bloques válidos`);
-                }
-
-                // Calcular MTP (mediana)
-                const sortedTimestamps = [...timestamps].sort((a, b) => a - b);
-                const medianTimestamp = sortedTimestamps[Math.floor(sortedTimestamps.length / 2)];
-                const compensatedMTP = medianTimestamp + 3300;
-                const mtpDate = new Date(compensatedMTP * 1000);
-                
-                mtpDiv.textContent = `MTP + 3300s (GMT-3): ${mtpDate.toLocaleString('es-AR', {
-                    timeZone: 'America/Argentina/Buenos_Aires',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric'
-                })}`;
-
-                // Calcular media aritmética
-                const meanTimestamp = Math.round(timestamps.reduce((sum, time) => sum + time, 0) / timestamps.length);
-                const compensatedMean = meanTimestamp + 3300;
-                const meanDate = new Date(compensatedMean * 1000);
-                
-                meanDiv.textContent = `Media + 3300s (GMT-3): ${meanDate.toLocaleString('es-AR', {
-                    timeZone: 'America/Argentina/Buenos_Aires',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric'
-                })}`;
-
-                statusDiv.textContent = `✓ Datos actualizados (${timestamps.length} bloques)`;
-                statusDiv.className = 'success';
-                
-            } catch (error) {
-                console.error('Error completo:', error);
-                statusDiv.textContent = `❌ Error: ${error.message}`;
-                statusDiv.className = 'error';
-                mtpDiv.textContent = 'No disponible - Error de conexión';
-                meanDiv.textContent = 'No disponible - Error de conexión';
-                proxyStatus.textContent = '⚠️ Problemas de conexión. Intenta cambiar el método.';
-                proxyStatus.className = 'proxy-status warning';
-            } finally {
-                updateBtn.disabled = false;
-                isUpdating = false;
-            }
+        return { blocks, method: 'AllOrigins Proxy' };
+      },
+      mempool: async () => {
+        const r1 = await fetch('https://mempool.space/api/v1/blocks');
+        const bd = await r1.json();
+        const blocks = bd.slice(0, 11).map(b => ({
+          time: b.timestamp || Math.floor(b.mediantime || Date.now()/1000),
+          height: b.height
+        }));
+        return { blocks, method: 'Mempool.space' };
+      },
+      blockstream: async () => {
+        const r1  = await fetch('https://blockstream.info/api/blocks/tip/height');
+        const tip = await r1.text();
+        const blocks = [];
+        for (let i = 0; i < 11; i++) {
+          const rh   = await fetch(`https://blockstream.info/api/block-height/${tip - i}`);
+          const hash = await rh.text();
+          const rb   = await fetch(`https://blockstream.info/api/block/${hash}`);
+          const b    = await rb.json();
+          blocks.push({ time: b.timestamp, height: b.height });
         }
+        return { blocks, method: 'Blockstream' };
+      }
+    };
 
-        function toggleAutoUpdate() {
-            const autoStatus = document.getElementById('autoStatus');
-            if (autoUpdateInterval) {
-                clearInterval(autoUpdateInterval);
-                autoUpdateInterval = null;
-                autoStatus.textContent = 'OFF';
-            } else {
-                autoUpdateInterval = setInterval(getBlockchainTimes, 60000);
-                autoStatus.textContent = 'ON';
-                getBlockchainTimes(); // Actualizar inmediatamente
-            }
-        }
+    // ═══════════════════════════════════════════════════════════════
+    //  ARRANQUE
+    // ═══════════════════════════════════════════════════════════════
+    buildMatrix();
+    requestAnimationFrame(loop);
+    getBlockchainTimes();
 
-        // Ejecutar al cargar
-        window.addEventListener('load', () => {
-            getBlockchainTimes();
-        });
+    // Auto-refresh cada 60 s
+    setInterval(() => {
+      // Solo actualiza los datos; no interrumpe la animación actual
+      // Los nuevos channels se cargan al terminar el ciclo actual
+      getBlockchainTimes();
+    }, 60000);
 
-        // Controla la visibilidad de los métodos de obtención según la cadena
-        document.getElementById('blockchain').addEventListener('change', function() {
-            const isBCH = this.value === 'BCH';
-            const methodSelect = document.getElementById('method');
-            
-            // Si es BCH, solo permitimos 'auto' (que se mapea al fetcher de BCH)
-            if (isBCH) {
-                methodSelect.value = 'auto'; // Forzamos a 'auto'
-                methodSelect.disabled = true;
-            } else {
-                methodSelect.disabled = false;
-            }
-            
-            // Forzamos la actualización
-            getBlockchainTimes();
-        });
-    </script>
+  </script>
 </body>
 </html>
