@@ -162,7 +162,9 @@
     let chanIdx     = 0;
     let phase       = 'idle'; // idle | scroll-in | pause | blink | scroll-out
     let colOffset   = 0;      // columna de inicio del mensaje en la pantalla
-    let msgColumns  = [];     // mensaje actual convertido a columnas LED
+    let staticColumns = [];    // parte fija del mensaje actual convertida a columnas LED
+    let blinkColumns  = [];    // parte parpadeante del mensaje actual convertida a columnas LED
+    let msgColumns    = [];    // mensaje actual completo convertido a columnas LED
     let blinkCount  = 0;
     let blinkState  = true;
 
@@ -233,6 +235,53 @@
       }
     }
 
+    function renderSplitFrame(staticCols, blinkCols, startCol, blinkVisible) {
+      const children = matrixEl.children;
+      const screen = new Uint8Array(ROWS * COLS);
+
+      // Parte fija: siempre visible
+      for (let mc = 0; mc < staticCols.length; mc++) {
+        const sc = startCol + mc;
+        if (sc < 0 || sc >= COLS) continue;
+
+        const col = staticCols[mc];
+        for (let r = 0; r < ROWS; r++) {
+          if (col[r]) screen[r * COLS + sc] = 1;
+        }
+      }
+
+      // Parte parpadeante: solo visible si blinkVisible = true
+      if (blinkVisible) {
+        const blinkStart = startCol + staticCols.length;
+
+        for (let mc = 0; mc < blinkCols.length; mc++) {
+          const sc = blinkStart + mc;
+          if (sc < 0 || sc >= COLS) continue;
+
+          const col = blinkCols[mc];
+          for (let r = 0; r < ROWS; r++) {
+            if (col[r]) screen[r * COLS + sc] = 1;
+          }
+        }
+      }
+
+      for (let i = 0; i < ROWS * COLS; i++) {
+        const el = children[i];
+        const on = screen[i] === 1;
+        const was = el.classList.contains('on');
+
+        if (on !== was) {
+          if (on) {
+            el.classList.remove('off');
+            el.classList.add('on');
+          } else {
+            el.classList.remove('on');
+            el.classList.add('off');
+          }
+        }
+      }
+    }
+
     function clearScreen() {
       renderFrame([], 0, false);
     }
@@ -259,12 +308,16 @@
     const BLINK_STEP_MS = 1000; // cada cambio dura 1000 ms (0.5 Hz = 1 ciclo/2s → medio ciclo = 1s)
 
     function loadChannel(idx) {
-      chanIdx    = idx % channels.length;
-      const ch   = channels[chanIdx];
-      msgColumns = textToLED(ch.text);
-      colOffset  = COLS + MARGIN;  // empieza fuera por la derecha
+      chanIdx = idx % channels.length;
+      const ch = channels[chanIdx];
+
+      staticColumns = textToLED(ch.staticText || '');
+      blinkColumns  = textToLED(ch.blinkText || '');
+      msgColumns    = [...staticColumns, ...blinkColumns];
+
+      colOffset = COLS + MARGIN;
       channelLbl.textContent = ch.label;
-      phase      = 'scroll-in';
+      phase = 'scroll-in';
     }
 
     function tickScroll() {
@@ -314,10 +367,10 @@
           blinkCount++;
           phaseTimer = performance.now();
         }
-        renderFrame(msgColumns, colOffset, blinkState);
+        renderSplitFrame(staticColumns, blinkColumns, colOffset, blinkState);
 
         if (blinkCount >= BLINK_TOTAL) {
-          renderFrame(msgColumns, colOffset, true); // queda encendido
+          renderSplitFrame(staticColumns, blinkColumns, colOffset, true); // queda encendido
           phase = 'scroll-out';
         }
       }
@@ -475,12 +528,26 @@
     // ─── Datos de tiempo del sistema (siempre disponibles) ────────
     function getSystemChannel() {
       const d = new Date();
-      const fmt = d.toLocaleString('es-AR', {
+
+      const dateFmt = d.toLocaleDateString('es-AR', {
         timeZone: 'America/Argentina/Buenos_Aires',
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-        day: '2-digit', month: '2-digit', year: 'numeric'
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
       });
-      return { label: 'SISTEMA  (GMT-3)', text: `SISTEMA: ${fmt}` };
+
+      const timeFmt = d.toLocaleTimeString('es-AR', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+
+      return {
+        label: 'SISTEMA  (GMT-3)',
+        staticText: `SISTEMA: ${dateFmt} `,
+        blinkText: timeFmt
+      };
     }
 
     // ─── Datos de blockchain ──────────────────────────────────────
@@ -516,27 +583,51 @@
       const sorted  = [...timestamps].sort((a,b) => a-b);
       const mtp     = sorted[Math.floor(sorted.length/2)] + 3300;
       const mtpDate = new Date(mtp * 1000);
-      const mtpFmt  = mtpDate.toLocaleString('es-AR', {
+      const mtpDateFmt = mtpDate.toLocaleDateString('es-AR', {
         timeZone: 'America/Argentina/Buenos_Aires',
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-        day: '2-digit', month: '2-digit', year: 'numeric'
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+
+      const mtpTimeFmt = mtpDate.toLocaleTimeString('es-AR', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
       });
 
       // Media
       const mean     = Math.round(timestamps.reduce((s,t) => s+t, 0) / timestamps.length) + 3300;
       const meanDate = new Date(mean * 1000);
-      const meanFmt  = meanDate.toLocaleString('es-AR', {
+      const meanDateFmt = meanDate.toLocaleDateString('es-AR', {
         timeZone: 'America/Argentina/Buenos_Aires',
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-        day: '2-digit', month: '2-digit', year: 'numeric'
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+
+      const meanTimeFmt = meanDate.toLocaleTimeString('es-AR', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
       });
 
       statusBar.textContent = `✓ Datos actualizados · vía ${result.method}`;
 
       setChannels([
-        { label: 'SISTEMA  (GMT-3)',    text: `SISTEMA: ${sysCh.text.replace('SISTEMA: ','')}` },
-        { label: 'MTP + 3300s  (BTC)', text: `MTP: ${mtpFmt}` },
-        { label: 'MEDIA + 3300s (BTC)', text: `MEDIA: ${meanFmt}` }
+        sysCh,
+        {
+          label: 'MTP + 3300s  (BTC)',
+          staticText: `MTP: ${mtpDateFmt} `,
+          blinkText: mtpTimeFmt
+        },
+        {
+          label: 'MEDIA + 3300s (BTC)',
+          staticText: `MEDIA: ${meanDateFmt} `,
+          blinkText: meanTimeFmt
+        }
       ]);
     }
 
