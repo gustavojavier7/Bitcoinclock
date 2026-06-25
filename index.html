@@ -529,23 +529,17 @@
     function getSystemChannel() {
       const d = new Date();
 
-      const dateFmt = d.toLocaleDateString('es-AR', {
-        timeZone: 'America/Argentina/Buenos_Aires',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
-
       const timeFmt = d.toLocaleTimeString('es-AR', {
         timeZone: 'America/Argentina/Buenos_Aires',
         hour: '2-digit',
         minute: '2-digit',
-        second: '2-digit'
+        second: '2-digit',
+        hour12: false
       });
 
       return {
         label: 'SISTEMA  (GMT-3)',
-        staticText: `SISTEMA: ${dateFmt} `,
+        staticText: 'SYS ',
         blinkText: timeFmt
       };
     }
@@ -583,35 +577,25 @@
       const sorted  = [...timestamps].sort((a,b) => a-b);
       const mtp     = sorted[Math.floor(sorted.length/2)] + 3300;
       const mtpDate = new Date(mtp * 1000);
-      const mtpDateFmt = mtpDate.toLocaleDateString('es-AR', {
-        timeZone: 'America/Argentina/Buenos_Aires',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
 
       const mtpTimeFmt = mtpDate.toLocaleTimeString('es-AR', {
         timeZone: 'America/Argentina/Buenos_Aires',
         hour: '2-digit',
         minute: '2-digit',
-        second: '2-digit'
+        second: '2-digit',
+        hour12: false
       });
 
       // Media
       const mean     = Math.round(timestamps.reduce((s,t) => s+t, 0) / timestamps.length) + 3300;
       const meanDate = new Date(mean * 1000);
-      const meanDateFmt = meanDate.toLocaleDateString('es-AR', {
-        timeZone: 'America/Argentina/Buenos_Aires',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
 
       const meanTimeFmt = meanDate.toLocaleTimeString('es-AR', {
         timeZone: 'America/Argentina/Buenos_Aires',
         hour: '2-digit',
         minute: '2-digit',
-        second: '2-digit'
+        second: '2-digit',
+        hour12: false
       });
 
       statusBar.textContent = `✓ Datos actualizados · vía ${result.method}`;
@@ -620,12 +604,12 @@
         sysCh,
         {
           label: 'MTP + 3300s  (BTC)',
-          staticText: `MTP: ${mtpDateFmt} `,
+          staticText: 'MTP ',
           blinkText: mtpTimeFmt
         },
         {
           label: 'MEDIA + 3300s (BTC)',
-          staticText: `MEDIA: ${meanDateFmt} `,
+          staticText: 'AVG ',
           blinkText: meanTimeFmt
         }
       ]);
