@@ -159,6 +159,7 @@
     // ═══════════════════════════════════════════════════════════════
     // Fases: 'scroll-in' → 'pause' → 'scroll-out' → (siguiente canal)
     let channels    = [];   // array de { label, text } que se irán cargando
+    let pendingChannels = null; // nuevos canales pendientes para aplicar al terminar el ciclo completo
     let chanIdx     = 0;
     let phase       = 'idle'; // idle | scroll-in | pause | blink | scroll-out
     let colOffset   = 0;      // columna de inicio del mensaje en la pantalla
@@ -383,8 +384,20 @@
         // Salió completamente por la izquierda
         if (colOffset + msgColumns.length <= 0) {
           clearScreen();
+
           if (channels.length > 0) {
-            loadChannel(chanIdx + 1);
+            const nextIdx = chanIdx + 1;
+
+            if (nextIdx >= channels.length) {
+              if (pendingChannels) {
+                channels = pendingChannels;
+                pendingChannels = null;
+              }
+
+              loadChannel(0);
+            } else {
+              loadChannel(nextIdx);
+            }
           } else {
             phase = 'idle';
           }
@@ -474,13 +487,22 @@
       return cols;
     }
 
+    function blankColumns(n = 3) {
+      return Array.from({ length: n }, () => Array(ROWS).fill(false));
+    }
+
     function textToLED(text) {
       const out = [];
       const up  = text.toUpperCase();
+
       for (let i = 0; i < up.length; i++) {
         out.push(...charToColumns(up[i]));
-        out.push(...charToColumns(' ')); // separador entre letras
+
+        if (i < up.length - 1) {
+          out.push(...blankColumns(3));
+        }
       }
+
       return out;
     }
 
@@ -505,7 +527,7 @@
 
     refreshBtn.addEventListener('click', () => {
       statusBar.textContent = 'Actualizando datos…';
-      getBlockchainTimes();
+      getBlockchainTimes(false);
     });
 
     function adjustOff(hex) {
@@ -519,10 +541,22 @@
     // ═══════════════════════════════════════════════════════════════
     //  CARGA DE CANALES Y ARRANQUE
     // ═══════════════════════════════════════════════════════════════
-    function setChannels(data) {
-      channels = data;
-      chanIdx  = 0;
-      if (channels.length > 0) loadChannel(0);
+    function setChannels(data, options = {}) {
+      const immediate = options.immediate === true;
+
+      if (channels.length === 0 || immediate) {
+        channels = data;
+        pendingChannels = null;
+        chanIdx = 0;
+
+        if (channels.length > 0) {
+          loadChannel(0);
+        }
+
+        return;
+      }
+
+      pendingChannels = data;
     }
 
     // ─── Datos de tiempo del sistema (siempre disponibles) ────────
@@ -545,7 +579,7 @@
     }
 
     // ─── Datos de blockchain ──────────────────────────────────────
-    async function getBlockchainTimes() {
+    async function getBlockchainTimes(immediate = false) {
       const fetchers = BTC_FETCHERS;
       const methods  = ['mempool', 'blockstream', 'proxy1'];
       let result = null;
@@ -562,14 +596,14 @@
 
       if (!result) {
         statusBar.textContent = '⚠️ Sin datos de blockchain · mostrando reloj del sistema';
-        setChannels([sysCh]);
+        setChannels([sysCh], { immediate });
         return;
       }
 
       const timestamps = result.blocks.map(b => b.time).filter(t => t && !isNaN(t));
       if (timestamps.length < 11) {
         statusBar.textContent = '⚠️ Bloques insuficientes · mostrando reloj del sistema';
-        setChannels([sysCh]);
+        setChannels([sysCh], { immediate });
         return;
       }
 
@@ -612,7 +646,7 @@
           staticText: 'AVG ',
           blinkText: meanTimeFmt
         }
-      ]);
+      ], { immediate });
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -662,13 +696,13 @@
     // ═══════════════════════════════════════════════════════════════
     buildMatrix();
     requestAnimationFrame(loop);
-    getBlockchainTimes();
+    getBlockchainTimes(true);
 
     // Auto-refresh cada 60 s
     setInterval(() => {
       // Solo actualiza los datos; no interrumpe la animación actual
       // Los nuevos channels se cargan al terminar el ciclo actual
-      getBlockchainTimes();
+      getBlockchainTimes(false);
     }, 60000);
 
   </script>
