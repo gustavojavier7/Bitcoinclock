@@ -7,7 +7,7 @@
 
   <style>
     :root {
-      --columnas: 80;
+      --columnas: 88;
       --filas: 7;
       --led-size: 7px;
       --led-gap: 2px;
@@ -150,7 +150,7 @@
     // ═══════════════════════════════════════════════════════════════
     //  CONSTANTES DE LA MATRIZ
     // ═══════════════════════════════════════════════════════════════
-    const COLS   = 80;
+    const COLS   = 88;
     const ROWS   = 7;
     const MARGIN = 3;   // columnas vacías entre final del mensaje y borde derecho al entrar
 
@@ -580,114 +580,68 @@
 
     // ─── Datos de blockchain ──────────────────────────────────────
     async function getBlockchainTimes(immediate = false) {
-      const fetchers = BTC_FETCHERS;
-      const methods  = ['mempool', 'blockstream', 'proxy1'];
-      let result = null;
+      statusBar.textContent = 'Cargando datos de blockchain…';
 
-      for (const m of methods) {
-        try {
-          statusBar.textContent = `Probando ${m}…`;
-          result = await fetchers[m]();
-          break;
-        } catch(e) { /* intentar siguiente */ }
+      let result = null;
+      try {
+        result = await BTC_FETCHERS.mempool();
+      } catch(e) {
+        console.error('Error al obtener datos:', e);
       }
 
       const sysCh = getSystemChannel();
 
-      if (!result) {
-        statusBar.textContent = '⚠️ Sin datos de blockchain · mostrando reloj del sistema';
-        setChannels([sysCh], { immediate });
-        return;
-      }
-
-      const timestamps = result.blocks.map(b => b.time).filter(t => t && !isNaN(t));
-      if (timestamps.length < 11) {
-        statusBar.textContent = '⚠️ Bloques insuficientes · mostrando reloj del sistema';
+      if (!result || result.blocks.length < 11) {
+        statusBar.textContent = '⚠️ Sin datos de blockchain · usando reloj del sistema';
         setChannels([sysCh], { immediate });
         return;
       }
 
       // MTP
-      const sorted  = [...timestamps].sort((a,b) => a-b);
+      const sorted  = [...result.blocks.map(b => b.time)].sort((a,b) => a-b);
       const mtp     = sorted[Math.floor(sorted.length/2)] + 3300;
       const mtpDate = new Date(mtp * 1000);
-
       const mtpTimeFmt = mtpDate.toLocaleTimeString('es-AR', {
         timeZone: 'America/Argentina/Buenos_Aires',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
       });
 
       // Media
-      const mean     = Math.round(timestamps.reduce((s,t) => s+t, 0) / timestamps.length) + 3300;
+      const mean     = Math.round(result.blocks.reduce((s,b) => s + b.time, 0) / result.blocks.length) + 3300;
       const meanDate = new Date(mean * 1000);
-
       const meanTimeFmt = meanDate.toLocaleTimeString('es-AR', {
         timeZone: 'America/Argentina/Buenos_Aires',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
       });
 
-      statusBar.textContent = `✓ Datos actualizados · vía ${result.method}`;
+      statusBar.textContent = `✓ Datos actualizados · vía Mempool.space`;
 
-      setChannels([
+      const newChannels = [
         sysCh,
-        {
-          label: 'MTP + 3300s  (BTC)',
-          staticText: 'MTP ',
-          blinkText: mtpTimeFmt
-        },
-        {
-          label: 'MEDIA + 3300s (BTC)',
-          staticText: 'AVG ',
-          blinkText: meanTimeFmt
-        }
-      ], { immediate });
+        { label: 'MTP + 3300s (BTC)', staticText: 'MTP ', blinkText: mtpTimeFmt },
+        { label: 'MEDIA + 3300s (BTC)', staticText: 'AVG ', blinkText: meanTimeFmt }
+      ];
+
+      setChannels(newChannels, { immediate });
     }
 
     // ═══════════════════════════════════════════════════════════════
-    //  APIs BLOCKCHAIN (copiadas del original)
+    //  APIs BLOCKCHAIN - SOLO MEMPOOL.SPACE
     // ═══════════════════════════════════════════════════════════════
     const BTC_FETCHERS = {
-      proxy1: async () => {
-        const px = async (url) => {
-          const r = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          return r.json();
-        };
-        const latest = await px('https://blockchain.info/latestblock?cors=true');
-        const blocks = [];
-        for (let i = latest.height; i >= latest.height - 10; i--) {
-          const bd = await px(`https://blockchain.info/block-height/${i}?format=json&cors=true`);
-          blocks.push(bd.blocks[0]);
-        }
-        return { blocks, method: 'AllOrigins Proxy' };
-      },
       mempool: async () => {
-        const r1 = await fetch('https://mempool.space/api/v1/blocks');
-        const bd = await r1.json();
+        const r = await fetch('https://mempool.space/api/v1/blocks', {
+          cache: 'no-store',
+          headers: { 'Accept': 'application/json' }
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+
+        const bd = await r.json();
         const blocks = bd.slice(0, 11).map(b => ({
-          time: b.timestamp || Math.floor(b.mediantime || Date.now()/1000),
+          time: b.timestamp || b.mediantime || Math.floor(Date.now()/1000),
           height: b.height
         }));
         return { blocks, method: 'Mempool.space' };
-      },
-      blockstream: async () => {
-        const r1  = await fetch('https://blockstream.info/api/blocks/tip/height');
-        const tip = await r1.text();
-        const blocks = [];
-        for (let i = 0; i < 11; i++) {
-          const rh   = await fetch(`https://blockstream.info/api/block-height/${tip - i}`);
-          const hash = await rh.text();
-          const rb   = await fetch(`https://blockstream.info/api/block/${hash}`);
-          const b    = await rb.json();
-          blocks.push({ time: b.timestamp, height: b.height });
-        }
-        return { blocks, method: 'Blockstream' };
       }
     };
 
